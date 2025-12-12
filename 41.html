@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirLens – Air Quality Dashboard</title>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            transition: 0.3s ease-in-out;
+        }
+
+        :root {
+            --bg: #ffffff;
+            --text: #111;
+            --card: #f2f2f2;
+        }
+
+        .dark {
+            --bg: #111;
+            --text: #f2f2f2;
+            --card: #1c1c1c;
+        }
+
+        header {
+            background: #0099ff;
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+
+        section {
+            margin: 20px auto;
+            padding: 20px;
+            width: 92%;
+            background: var(--card);
+            border-radius: 10px;
+        }
+
+        h2 {
+            text-align: center;
+        }
+
+        input, select, button {
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        .search-box input {
+            width: 70%;
+        }
+
+        button {
+            background: #0099ff;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background: #007acc;
+        }
+
+        select {
+            width: 100%;
+            height: 120px;
+        }
+
+        footer {
+            background: #0099ff;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>AirLens – Air Quality & City Comparison Dashboard</h1>
+        <button id="modeToggle">🌙 Dark Mode</button>
+    </header>
+
+    <!-- Search Bar -->
+    <section class="search-box">
+        <input type="text" id="citySearch" placeholder="Search city by name">
+        <button onclick="searchCity()">Search</button>
+    </section>
+
+    <!-- City Selector -->
+    <section class="city-selection">
+        <h2>Select Cities to Compare</h2>
+        <select id="cityDropdown" multiple></select>
+        <button onclick="compareCities()">Compare</button>
+    </section>
+
+    <!-- Comparison Dashboard -->
+    <section class="dashboard">
+        <h2>Air Quality Comparison</h2>
+        <canvas id="aqChart"></canvas>
+    </section>
+
+    <!-- History Chart -->
+    <section class="history">
+        <h2>5-Day Historical PM2.5 Trend</h2>
+        <canvas id="historyChart"></canvas>
+    </section>
+
+    <!-- Health Recommendation -->
+    <section class="recommendations">
+        <h2>Health Recommendations</h2>
+        <p id="healthAdvice">Select a city to view details.</p>
+    </section>
+
+    <!-- Cleanest Cities Leaderboard -->
+    <section class="leaderboard">
+        <h2>Top Cleanest Cities (Lowest PM2.5)</h2>
+        <ol id="cityRankList"></ol>
+    </section>
+
+    <footer>
+        <p>AirLens © 2025 • Environmental Awareness Platform</p>
+    </footer>
+
+    <script>
+        // Mock Air Quality Data
+        const airData = {
+            "Delhi": { PM25: 320, PM10: 450, CO: 2.3, NO2: 80, history: [320, 310, 330, 350, 340] },
+            "Mumbai": { PM25: 60, PM10: 90, CO: 0.9, NO2: 30, history: [60, 55, 65, 70, 58] },
+            "Bangalore": { PM25: 45, PM10: 60, CO: 0.7, NO2: 25, history: [40, 42, 46, 48, 45] },
+            "Chennai": { PM25: 50, PM10: 70, CO: 0.8, NO2: 28, history: [55, 50, 48, 52, 49] },
+            "Hyderabad": { PM25: 55, PM10: 80, CO: 0.8, NO2: 32, history: [60, 65, 55, 50, 53] }
+        };
+
+        // Populate dropdown
+        const dropdown = document.getElementById("cityDropdown");
+        Object.keys(airData).forEach(city => {
+            let option = document.createElement("option");
+            option.value = city;
+            option.textContent = city;
+            dropdown.appendChild(option);
+        });
+
+        // Search
+        function searchCity() {
+            const city = document.getElementById("citySearch").value.trim();
+            if (airData[city]) {
+                alert(`✔ ${city} found! Select it from the dropdown.`);
+            } else {
+                alert("❌ City not found in database.");
+            }
+        }
+
+        // Charts
+        let aqChart, historyChart;
+
+        // Compare Cities
+        function compareCities() {
+            const selectedCities = [...dropdown.selectedOptions].map(o => o.value);
+
+            if (selectedCities.length === 0) return alert("Please select at least one city!");
+
+            const labels = ["PM2.5", "PM10", "CO", "NO2"];
+            const datasets = selectedCities.map(city => ({
+                label: city,
+                data: [
+                    airData[city].PM25,
+                    airData[city].PM10,
+                    airData[city].CO,
+                    airData[city].NO2
+                ],
+                borderWidth: 2
+            }));
+
+            if (aqChart) aqChart.destroy();
+            aqChart = new Chart(document.getElementById("aqChart"), {
+                type: "radar",
+                data: { labels, datasets }
+            });
+
+            generateAdvice(selectedCities[0]);
+            updateLeaderboard();
+            showHistory(selectedCities[0]);
+        }
+
+        // Health Tips
+        function generateAdvice(city) {
+            let pm = airData[city].PM25;
+            let tip = "";
+
+            if (pm < 50) tip = "Excellent air quality. Safe for all!";
+            else if (pm < 100) tip = "Moderate. Sensitive groups should limit outdoor time.";
+            else tip = "Very poor air! Wear a mask and avoid outdoor activities.";
+
+            document.getElementById("healthAdvice").textContent = `${city}: ${tip}`;
+        }
+
+        // Historical Line Chart
+        function showHistory(city) {
+            if (historyChart) historyChart.destroy();
+
+            historyChart = new Chart(document.getElementById("historyChart"), {
+                type: "line",
+                data: {
+                    labels: ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5"],
+                    datasets: [{
+                        label: `${city} PM2.5 over 5 days`,
+                        data: airData[city].history,
+                        borderColor: "#0099ff",
+                        borderWidth: 2
+                    }]
+                }
+            });
+        }
+
+        // Leaderboard
+        function updateLeaderboard() {
+            const ranking = Object.entries(airData)
+                .map(([name, data]) => ({ name, pm: data.PM25 }))
+                .sort((a, b) => a.pm - b.pm);
+
+            const list = document.getElementById("cityRankList");
+            list.innerHTML = "";
+
+            ranking.forEach(item => {
+                let li = document.createElement("li");
+                li.textContent = `${item.name} – PM2.5: ${item.pm}`;
+                list.appendChild(li);
+            });
+        }
+
+        // Dark Mode
+        document.getElementById("modeToggle").onclick = () => {
+            document.body.classList.toggle("dark");
+        };
+    </script>
+
+</body>
+</html>
